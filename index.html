@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ovice雑談会 グループ分けアプリ</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="assets/css/style.css?v=20260308-27" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header app-header">
+        <h1 class="app__title">雑談会 グループ分けアプリ</h1>
+        <p class="app__lead">
+          ファシリテーター候補の事前登録、フォーム回答の取り込み、1回目/2回目のグループ分けを1つの画面で行えます。
+        </p>
+      </header>
+
+      <nav class="app__phases phase-nav" aria-label="フェーズ">
+        <button class="phase-nav__item is-active" type="button" data-phase-nav="1">1. ファシ準備</button>
+        <button class="phase-nav__item" type="button" data-phase-nav="2">2. 1回目準備</button>
+        <button class="phase-nav__item" type="button" data-phase-nav="3">3. 1回目結果</button>
+        <button class="phase-nav__item" type="button" data-phase-nav="4">4. 2回目準備</button>
+        <button class="phase-nav__item" type="button" data-phase-nav="5">5. 2回目抽選・結果</button>
+      </nav>
+
+      <div id="result-modal" class="result-modal" hidden>
+        <section
+          class="result-modal__panel"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="result-modal-title"
+        >
+          <header class="result-modal__header">
+            <div class="result-modal__header-main">
+              <h2 id="result-modal-title">グループ分け結果</h2>
+              <div id="modal-draw-indicator" class="result-modal__draw" hidden>
+                <span id="modal-draw-phase" class="result-modal__draw-phase">ファシリテーター決定中</span>
+                <div class="result-modal__draw-progress" aria-hidden="true">
+                  <span id="modal-draw-progress-bar" class="result-modal__draw-progress-bar"></span>
+                </div>
+                <span class="result-modal__draw-remaining">残り <strong id="modal-draw-countdown">5.0</strong> 秒</span>
+              </div>
+              <div class="result-modal__actions">
+                <button
+                  id="modal-close-button"
+                  class="result-modal__close"
+                  type="button"
+                  aria-label="結果画面を閉じる"
+                >
+                  戻る
+                </button>
+                <button
+                  id="modal-go-round2-button"
+                  class="result-modal__close result-modal__close--next"
+                  type="button"
+                  hidden
+                >
+                  2回目へ進む
+                </button>
+              </div>
+            </div>
+          </header>
+          <div id="modal-content" class="result-modal__content"></div>
+        </section>
+      </div>
+
+      <section class="app__layout workspace" data-phase-visible="1,2,4">
+        <section class="app__inputs inputs">
+          <section class="app__section app__section--facilitator" data-phase-visible="1">
+            <div class="app__inputs-head inputs-head">
+              <h2 class="app__inputs-title">ファシリテーター候補（16名まで）</h2>
+            </div>
+            <div class="app__inline-actions inline-actions">
+              <span id="facilitator-count" class="app__mini-guide mini-guide" aria-live="polite">登録済み：0人</span>
+            </div>
+            <div id="facilitator-inputs" class="app__inputs-grid inputs-grid"></div>
+            <p id="facilitator-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
+          </section>
+
+          <section class="app__section app__section--participants" data-phase-visible="2,4" hidden>
+            <div class="app__inputs-head inputs-head">
+              <h2 class="app__inputs-title">参加者リスト</h2>
+            </div>
+            <p class="app__inputs-note inputs-note">
+              参加方法が変更の方が可能です。
+            </p>
+            <div id="participant-inputs" class="app__inputs-grid inputs-grid"></div>
+            <p id="participant-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
+          </section>
+
+          <section class="app__section app__section--additional" data-phase-visible="4" hidden>
+            <div class="app__inputs-head inputs-head">
+              <h2 class="app__inputs-title">追加参加者</h2>
+            </div>
+            <p class="app__inputs-note inputs-note">
+              必要なら追加参加者を入力してください。
+            </p>
+            <div id="additional-inputs" class="app__inputs-grid inputs-grid"></div>
+            <p id="additional-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
+          </section>
+        </section>
+
+        <aside class="app__controls controls" aria-label="グループ分け設定">
+          <section
+            class="app__control-card app__control-card--import app__control-card--phase1-import control-card control-card--import"
+            data-phase-visible="1"
+          >
+            <h2 class="app__control-title">ファシリテーター入力</h2>
+            <p class="app__control-note control-note">
+              ファシリテーター候補者をコピーして、<br />下のボタンで貼り付けできます。
+            </p>
+            <div class="app__import sheet-import">
+              <button id="read-facilitator-clipboard-side-button" class="app__import-button" type="button">
+                <span class="app__paste-icon paste-icon" aria-hidden="true">⎘</span>
+                <span>コピー内容を読み取り</span>
+              </button>
+            </div>
+          </section>
+
+          <div class="app__phase1-next phase1-next" data-phase-visible="1">
+            <button
+              id="go-phase2-button"
+              class="app__ghost-button app__ghost-button--primary app__ghost-button--wide"
+              type="button"
+            >
+              参加者編集画面へ
+            </button>
+          </div>
+
+          <section
+            class="app__control-card app__control-card--import control-card control-card--import"
+            data-phase-visible="2"
+            hidden
+          >
+            <h2 class="app__control-title">データ入力</h2>
+            <p class="app__control-note control-note">
+              スプレッドシートからコピーして、下の読み取りボタンを押してください。
+            </p>
+            <div class="app__import sheet-import">
+              <button id="read-clipboard-button" class="app__import-button" type="button">
+                <span class="app__paste-icon paste-icon" aria-hidden="true">⎘</span>
+                <span>コピー内容を読み取り</span>
+              </button>
+              <p id="clipboard-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
+            </div>
+          </section>
+
+          <section
+            class="app__control-card app__control-card--settings control-card control-card--settings"
+            data-phase-visible="2,3"
+            hidden
+          >
+            <h2 class="app__control-title">1回目 グループ設定</h2>
+            <span id="participant-guide-round1" class="app__participants-guide participants-guide" aria-live="polite">参加者：0人（マイクオン：0人）</span>
+            <div class="app__control-line control-line">
+              <label for="group-count-round1-trigger">グループ数を選択してください</label>
+              <span class="app__select-wrap group-select-wrap">
+                <span class="app__select-bracket select-bracket">[</span>
+                <span class="app__group-select-shell" data-group-select-shell>
+                  <button
+                    id="group-count-round1-trigger"
+                    class="app__group-select-trigger"
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="group-count-round1-listbox"
+                  >
+                    <span class="app__group-select-trigger-value" data-group-select-value>2</span>
+                    <span class="app__group-select-trigger-caret" aria-hidden="true">▾</span>
+                  </button>
+                  <div
+                    id="group-count-round1-listbox"
+                    class="app__group-select-menu"
+                    role="listbox"
+                    aria-label="1回目グループ数"
+                    hidden
+                    data-group-select-menu
+                  ></div>
+                  <select
+                    id="group-count-round1"
+                    class="app__group-select app__group-select--native"
+                    name="group-count-round1"
+                    aria-label="1回目グループ数"
+                  >
+                    <option value="2">2</option>
+                  </select>
+                </span>
+                <span class="app__select-bracket select-bracket">]</span>
+              </span>
+            </div>
+            <span id="mic-on-guide-round1" class="app__mic-guide mic-on-guide" aria-live="polite">1グループ：0人（マイクオン：0人）</span>
+            <span id="listener-guide-round1" class="app__mini-guide mini-guide" aria-live="polite">聞き専：0人 / ファシ候補：0人</span>
+          </section>
+
+          <section
+            class="app__control-card app__control-card--settings control-card control-card--settings"
+            data-phase-visible="3,4,5"
+            hidden
+          >
+            <h2 class="app__control-title">2回目 グループ設定</h2>
+            <span id="participant-guide-round2" class="app__participants-guide participants-guide" aria-live="polite">参加者：0人（マイクオン：0人）</span>
+            <div class="app__control-line control-line">
+              <label for="group-count-round2-trigger">グループ数を選択してください</label>
+              <span class="app__select-wrap group-select-wrap">
+                <span class="app__select-bracket select-bracket">[</span>
+                <span class="app__group-select-shell" data-group-select-shell>
+                  <button
+                    id="group-count-round2-trigger"
+                    class="app__group-select-trigger"
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-controls="group-count-round2-listbox"
+                  >
+                    <span class="app__group-select-trigger-value" data-group-select-value>2</span>
+                    <span class="app__group-select-trigger-caret" aria-hidden="true">▾</span>
+                  </button>
+                  <div
+                    id="group-count-round2-listbox"
+                    class="app__group-select-menu"
+                    role="listbox"
+                    aria-label="2回目グループ数"
+                    hidden
+                    data-group-select-menu
+                  ></div>
+                  <select
+                    id="group-count-round2"
+                    class="app__group-select app__group-select--native"
+                    name="group-count-round2"
+                    aria-label="2回目グループ数"
+                  >
+                    <option value="2">2</option>
+                  </select>
+                </span>
+                <span class="app__select-bracket select-bracket">]</span>
+              </span>
+            </div>
+            <span id="mic-on-guide-round2" class="app__mic-guide mic-on-guide" aria-live="polite">1グループ：0人（マイクオン：0人）</span>
+            <span id="listener-guide-round2" class="app__mini-guide mini-guide" aria-live="polite">聞き専：0人 / 不参加：0人 / 追加：0人</span>
+          </section>
+
+          <button id="shuffle-round1-button" class="app__shuffle-button" type="button" data-phase-visible="2" hidden>
+            <span class="app__shuffle-icon shuffle-icon" aria-hidden="true">⇄</span>
+            <span>振り分けスタート</span>
+          </button>
+          <button id="prepare-round2-button" class="app__ghost-button app__ghost-button--wide" type="button" data-phase-visible="3" hidden>
+            2回目準備へ進む
+          </button>
+          <button id="shuffle-round2-button" class="app__shuffle-button" type="button" data-phase-visible="4" hidden>
+            <span class="app__shuffle-icon shuffle-icon" aria-hidden="true">⇄</span>
+            <span>2回目 振り分けスタート</span>
+          </button>
+          <p id="error-message" class="app__error-message error-message" aria-live="polite"></p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="assets/js/app.js?v=20260308-27"></script>
+  </body>
+</html>
