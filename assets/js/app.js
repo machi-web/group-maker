@@ -50,9 +50,11 @@ const PHASE_DEFINITIONS = {
 const NAME_HEADER_TERMS = ["名前", "name", "participant", "ニックネーム", "氏名"];
 const ROUND1_HEADER_TERMS = ["1回目", "第1", "round1", "1st", "1回", "回目1", "c列"];
 const ROUND2_HEADER_TERMS = ["2回目", "第2", "round2", "2nd", "2回", "回目2", "d列"];
-const PARTICIPATION_CODE_GUIDE_ROUND2 = "1=マイクオン, 2=聞き専, 3=不参加";
-const PARTICIPATION_CODE_GUIDE_ADDITIONAL = "1=マイクオン, 2=聞き専";
-const PARTICIPANT_HEADER_ROUND2_DEFAULT = `2回目: ${PARTICIPATION_CODE_GUIDE_ROUND2}`;
+const PARTICIPATION_CODE_GUIDE_ROUND1 = "0=追加ファシ候補, 1=マイクオン, 2=聞き専";
+const PARTICIPATION_CODE_GUIDE_ROUND2 =
+  "0=追加ファシ候補, 1=マイクオン, 2=聞き専, 3=不参加";
+const PARTICIPATION_CODE_GUIDE_ADDITIONAL = "0=追加ファシ候補, 1=マイクオン, 2=聞き専";
+const PARTICIPANT_HEADER_ROUND2_DEFAULT = "2回目";
 
 const inputContainer = document.querySelector("#participant-inputs");
 const facilitatorContainer = document.querySelector("#facilitator-inputs");
@@ -185,17 +187,17 @@ function isNumericToken(token) {
 
 function parseRound1Code(raw) {
   const token = normalizeFlagToken(raw);
-  return token === "1" || token === "2" ? token : "";
+  return token === "0" || token === "1" || token === "2" ? token : "";
 }
 
 function parseRound2Code(raw) {
   const token = normalizeFlagToken(raw);
-  return token === "1" || token === "2" || token === "3" ? token : "";
+  return token === "0" || token === "1" || token === "2" || token === "3" ? token : "";
 }
 
 function parseAdditionalRound2Code(raw) {
   const token = normalizeFlagToken(raw);
-  return token === "1" || token === "2" ? token : "";
+  return token === "0" || token === "1" || token === "2" ? token : "";
 }
 
 function parseBooleanFlag(raw) {
@@ -579,7 +581,7 @@ function createParticipantFields() {
       <tr>
         <th class="app__input-header-index header-index" scope="col"></th>
         <th scope="col">名前</th>
-        <th class="participant-header-round1" scope="col">1回目: 1=マイクオン, 2=聞き専</th>
+        <th class="participant-header-round1" scope="col">1回目</th>
         <th class="participant-header-round2" scope="col">${PARTICIPANT_HEADER_ROUND2_DEFAULT}</th>
       </tr>
     </thead>
@@ -619,6 +621,7 @@ function createParticipantFields() {
           aria-label="${i}番の1回目参加方法"
         >
           <option value="" selected>-</option>
+          <option value="0">0</option>
           <option value="1">1</option>
           <option value="2">2</option>
         </select>
@@ -630,6 +633,7 @@ function createParticipantFields() {
           aria-label="${i}番の2回目参加方法"
         >
           <option value="" selected>-</option>
+          <option value="0">0</option>
           <option value="1">1</option>
           <option value="2">2</option>
           <option value="3">3</option>
@@ -661,7 +665,7 @@ function createAdditionalParticipantFields() {
       <tr>
         <th class="app__input-header-index header-index" scope="col"></th>
         <th scope="col">名前</th>
-        <th scope="col">${PARTICIPATION_CODE_GUIDE_ADDITIONAL}</th>
+        <th scope="col">参加方法</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -699,6 +703,7 @@ function createAdditionalParticipantFields() {
           aria-label="追加参加者${i}番の参加方法"
         >
           <option value="" selected>-</option>
+          <option value="0">0</option>
           <option value="1">1</option>
           <option value="2">2</option>
         </select>
@@ -884,7 +889,7 @@ function resolveParticipantColumnMapping(rows) {
 
       nonEmptyCount[i] += 1;
       const token = normalizeFlagToken(cell);
-      const isRound1Code = token === "1" || token === "2";
+      const isRound1Code = token === "0" || token === "1" || token === "2";
       const isRound2Code = isRound1Code || token === "3";
 
       if (isRound1Code) {
@@ -1163,12 +1168,19 @@ function buildRound1Participants() {
   );
 
   const round1Participants = baseParticipants
-    .filter((participant) => participant.round1Code === "1" || participant.round1Code === "2")
+    .filter(
+      (participant) =>
+        participant.round1Code === "0" ||
+        participant.round1Code === "1" ||
+        participant.round1Code === "2"
+    )
     .map((participant) => ({
       sourceId: participant.sourceId,
       name: participant.name,
       listener: participant.round1Code === "2",
-      facilitator: facilitatorSet.has(normalizeNameKey(participant.name)),
+      facilitator:
+        participant.round1Code === "0" ||
+        facilitatorSet.has(normalizeNameKey(participant.name)),
     }));
 
   const facilitatorOnlyParticipants = buildFacilitatorOnlyParticipants(
@@ -1191,22 +1203,36 @@ function buildRound2Participants() {
   );
 
   const baseParticipants = baseParticipantsSource
-    .filter((participant) => participant.round2Code === "1" || participant.round2Code === "2")
+    .filter(
+      (participant) =>
+        participant.round2Code === "0" ||
+        participant.round2Code === "1" ||
+        participant.round2Code === "2"
+    )
     .map((participant) => ({
       sourceId: participant.sourceId,
       name: participant.name,
       listener: participant.round2Code === "2",
-      facilitator: facilitatorSet.has(normalizeNameKey(participant.name)),
+      facilitator:
+        participant.round2Code === "0" ||
+        facilitatorSet.has(normalizeNameKey(participant.name)),
       isAdditional: false,
     }));
 
   const additionalParticipants = additionalParticipantsSource
-    .filter((participant) => participant.round2Code === "1" || participant.round2Code === "2")
+    .filter(
+      (participant) =>
+        participant.round2Code === "0" ||
+        participant.round2Code === "1" ||
+        participant.round2Code === "2"
+    )
     .map((participant) => ({
       sourceId: participant.sourceId,
       name: participant.name,
       listener: participant.round2Code === "2",
-      facilitator: facilitatorSet.has(normalizeNameKey(participant.name)),
+      facilitator:
+        participant.round2Code === "0" ||
+        facilitatorSet.has(normalizeNameKey(participant.name)),
       isAdditional: true,
     }));
 
@@ -1330,9 +1356,11 @@ function updateRoundGuides() {
 
   const round1MicOn = round1Participants.filter((participant) => !participant.listener).length;
   const round1Listeners = round1Participants.length - round1MicOn;
+  const round1Facilitators = countFacilitatorParticipants(round1Participants);
 
   const round2MicOn = round2Participants.filter((participant) => !participant.listener).length;
   const round2Listeners = round2Participants.length - round2MicOn;
+  const round2Facilitators = countFacilitatorParticipants(round2Participants);
 
   const round1GroupCount = Number(groupSelectRound1?.value || "0");
   const round2GroupCount = Number(groupSelectRound2?.value || "0");
@@ -1368,7 +1396,7 @@ function updateRoundGuides() {
   }
 
   if (listenerGuideRound1) {
-    listenerGuideRound1.textContent = `聞き専：${round1Listeners}人 / ファシ候補：${facilitator.names.length}人`;
+    listenerGuideRound1.textContent = `聞き専：${round1Listeners}人 / ファシ候補：${round1Facilitators}人`;
   }
 
   const round2MembersText = Number.isInteger(round2GroupCount) && round2GroupCount > 0
@@ -1391,7 +1419,10 @@ function updateRoundGuides() {
   ).length;
   const absentCount = absentBaseCount + absentAdditionalCount;
   const activeAdditionalCount = additionalParticipants.filter(
-    (participant) => participant.round2Code === "1" || participant.round2Code === "2"
+    (participant) =>
+      participant.round2Code === "0" ||
+      participant.round2Code === "1" ||
+      participant.round2Code === "2"
   ).length;
 
   if (micOnGuideRound2) {
@@ -1399,7 +1430,7 @@ function updateRoundGuides() {
   }
 
   if (listenerGuideRound2) {
-    listenerGuideRound2.textContent = `聞き専：${round2Listeners}人 / 不参加：${absentCount}人 / 追加：${activeAdditionalCount}人`;
+    listenerGuideRound2.textContent = `聞き専：${round2Listeners}人 / ファシ候補：${round2Facilitators}人 / 不参加：${absentCount}人 / 追加：${activeAdditionalCount}人`;
   }
 }
 
@@ -2851,7 +2882,7 @@ function applySingleCodePaste(target, clipboardText) {
   }
 
   if (target.classList.contains("participant-round1-code")) {
-    if (value === "1" || value === "2") {
+    if (value === "0" || value === "1" || value === "2") {
       target.value = value;
       updateGroupSelectConstraints();
       return true;
@@ -2863,7 +2894,7 @@ function applySingleCodePaste(target, clipboardText) {
     target.classList.contains("participant-round2-code") ||
     target.classList.contains("additional-round2-code")
   ) {
-    if (value === "1" || value === "2" || value === "3") {
+    if (value === "0" || value === "1" || value === "2" || value === "3") {
       target.value = value;
       updateGroupSelectConstraints();
       return true;
@@ -3179,8 +3210,7 @@ function updateParticipantTableHeaders() {
     return;
   }
 
-  round2Header.textContent =
-    currentPhase === 4 ? PARTICIPATION_CODE_GUIDE_ROUND2 : PARTICIPANT_HEADER_ROUND2_DEFAULT;
+  round2Header.textContent = PARTICIPANT_HEADER_ROUND2_DEFAULT;
 }
 
 function updateActionButtonStates() {

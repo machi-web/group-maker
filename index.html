@@ -12,7 +12,7 @@
       <header class="app__header app-header">
         <h1 class="app__title">雑談会 グループ分けアプリ</h1>
         <p class="app__lead">
-          ファシリテーター候補の事前登録（任意）、フォーム回答の取り込み、1回目/2回目のグループ分けを1つの画面で行えます。
+          ファシリテーター候補の事前登録（任意）に加え、参加者からの追加任命にも対応した1回目/2回目のグループ分けを1つの画面で行えます。
         </p>
       </header>
 
@@ -69,7 +69,7 @@
         <section class="app__inputs inputs">
           <section class="app__section app__section--facilitator" data-phase-visible="1">
             <div class="app__inputs-head inputs-head">
-              <h2 class="app__inputs-title">ファシリテーター候補（任意・16名まで）</h2>
+              <h2 class="app__inputs-title">事前ファシ候補（任意・16名まで）</h2>
             </div>
             <div class="app__inline-actions inline-actions">
               <span id="facilitator-count" class="app__mini-guide mini-guide" aria-live="polite">登録済み：0人</span>
@@ -78,12 +78,20 @@
             <p id="facilitator-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
           </section>
 
+          <p class="app__inputs-note inputs-note" data-phase-visible="2,4" hidden>
+            参加方法コード:
+            <code>0</code>=追加ファシ候補
+            <code>1</code>=マイクオン
+            <code>2</code>=聞き専
+            <code>3</code>=不参加（2回目のみ）
+          </p>
+
           <section class="app__section app__section--participants" data-phase-visible="2,4" hidden>
             <div class="app__inputs-head inputs-head">
               <h2 class="app__inputs-title">参加者リスト</h2>
             </div>
             <p class="app__inputs-note inputs-note">
-              参加方法が変更の方が可能です。
+              必要に応じて参加方法を変更できます。追加ファシ候補は1回目と2回目で別々に設定可能です。
             </p>
             <div id="participant-inputs" class="app__inputs-grid inputs-grid"></div>
             <p id="participant-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
@@ -94,7 +102,7 @@
               <h2 class="app__inputs-title">追加参加者</h2>
             </div>
             <p class="app__inputs-note inputs-note">
-              必要なら追加参加者を入力してください。
+              必要なら追加参加者を入力してください。参加方法コードは参加者リストと共通です。
             </p>
             <div id="additional-inputs" class="app__inputs-grid inputs-grid"></div>
             <p id="additional-message" class="app__clipboard-message clipboard-message" aria-live="polite"></p>
@@ -106,9 +114,9 @@
             class="app__control-card app__control-card--import app__control-card--phase1-import control-card control-card--import"
             data-phase-visible="1"
           >
-            <h2 class="app__control-title">ファシリテーター入力</h2>
+            <h2 class="app__control-title">事前ファシ候補入力</h2>
             <p class="app__control-note control-note">
-              ファシリテーター候補者をコピーして、<br />下のボタンで貼り付けできます。
+              事前に決まっているファシ候補者をコピーして、<br />下のボタンで貼り付けできます。
             </p>
             <div class="app__import sheet-import">
               <button id="read-facilitator-clipboard-side-button" class="app__import-button" type="button">
@@ -135,7 +143,7 @@
           >
             <h2 class="app__control-title">データ入力</h2>
             <p class="app__control-note control-note">
-              スプレッドシートからコピーして、下の読み取りボタンを押してください。
+              スプレッドシートからコピーして読み取ったあと、参加者リストで <code>0</code> を選ぶとファシ候補を追加任命できます。
             </p>
             <div class="app__import sheet-import">
               <button id="read-clipboard-button" class="app__import-button" type="button">
@@ -237,7 +245,7 @@
               </span>
             </div>
             <span id="mic-on-guide-round2" class="app__mic-guide mic-on-guide" aria-live="polite">1グループ：0人（マイクオン：0人）</span>
-            <span id="listener-guide-round2" class="app__mini-guide mini-guide" aria-live="polite">聞き専：0人 / 不参加：0人 / 追加：0人</span>
+            <span id="listener-guide-round2" class="app__mini-guide mini-guide" aria-live="polite">聞き専：0人 / ファシ候補：0人 / 不参加：0人 / 追加：0人</span>
           </section>
 
           <button id="shuffle-round1-button" class="app__shuffle-button" type="button" data-phase-visible="2" hidden>
@@ -256,6 +264,6 @@
       </section>
     </main>
 
-    <script src="assets/js/app.js?v=20260403-01"></script>
+    <script src="assets/js/app.js?v=20260404-04"></script>
   </body>
 </html>
