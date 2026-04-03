@@ -7,7 +7,6 @@ const MIN_MEMBERS_PER_GROUP_LARGE = 4;
 const MIN_MEMBERS_PER_GROUP_LARGE_THRESHOLD = 50;
 const MAX_MEMBERS_PER_GROUP = 7;
 const MIN_GROUP_COUNT = 2;
-const MIN_FACILITATORS_TO_ADVANCE_PHASE = 3;
 
 const DRAW_DURATION_MS = 5000;
 const DRAW_TICK_MS = 120;
@@ -17,7 +16,10 @@ const DRAW_GRID_COLUMNS_DESKTOP = 8;
 const DRAW_GRID_COLUMNS_MOBILE = 4;
 const DRAW_GRID_MOBILE_MAX_WIDTH = 599;
 const GROUP_LABEL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const DRAW_PHASE_TEXTS = ["ファシリテーター決定中", "メンバーを振り分け中"];
+const FACILITATOR_PHASE_TEXT = "ファシリテーター決定中";
+const MEMBER_PHASE_TEXT = "メンバーを振り分け中";
+const GROUP_PHASE_TEXT = "グループを振り分け中";
+const DRAW_PHASE_TEXTS = [FACILITATOR_PHASE_TEXT, MEMBER_PHASE_TEXT, GROUP_PHASE_TEXT];
 
 const ROUND2_PAIR_OVERLAP_PENALTY = 40;
 const ROUND2_SAME_GROUP_PENALTY = 220;
@@ -25,7 +27,7 @@ const ROUND2_SAME_GROUP_PENALTY = 220;
 const PHASE_DEFINITIONS = {
   1: {
     title: "フェーズ1：ファシ準備",
-    description: "最大16名のファシリテーター候補を登録します。",
+    description: "必要に応じて最大16名のファシリテーター候補を登録します。",
   },
   2: {
     title: "フェーズ2：1回目準備",
@@ -1231,26 +1233,28 @@ function getRequiredGroupCount(participantCount) {
   return Math.ceil(participantCount / MAX_MEMBERS_PER_GROUP);
 }
 
-function getFacilitatorParticipantCount(participants) {
-  return participants.filter((participant) => participant.facilitator).length;
-}
-
 function getMaximumGroupCount(
-  participantCount,
-  facilitatorCount = getFacilitatorCandidates().names.length
+  participantCount
 ) {
   if (participantCount <= 0) {
     return 0;
   }
 
-  const facilitatorGroupUpperBound = Math.min(FACILITATOR_INPUT_COUNT, facilitatorCount);
-  if (facilitatorGroupUpperBound <= 0) {
-    return 0;
-  }
-
   const minMembers = getMinimumMembersPerGroup(participantCount);
   const participantCapacityUpperBound = Math.floor(participantCount / minMembers);
-  return Math.min(PARTICIPANT_INPUT_COUNT, facilitatorGroupUpperBound, participantCapacityUpperBound);
+  return Math.min(PARTICIPANT_INPUT_COUNT, participantCapacityUpperBound);
+}
+
+function countFacilitatorParticipants(participants) {
+  return participants.filter((participant) => participant.facilitator).length;
+}
+
+function getDefaultGroupCount(minimumSelectable, maximumSelectable, facilitatorCount) {
+  if (facilitatorCount > 0) {
+    return Math.min(maximumSelectable, Math.max(minimumSelectable, facilitatorCount));
+  }
+
+  return maximumSelectable;
 }
 
 function formatPeopleRange(minValue, maxValue) {
@@ -1268,7 +1272,7 @@ function formatPeopleRange(minValue, maxValue) {
 function rebuildGroupSelect(
   selectElement,
   participantCount,
-  facilitatorCount = getFacilitatorCandidates().names.length
+  facilitatorCount = 0
 ) {
   if (!(selectElement instanceof HTMLSelectElement)) {
     return;
@@ -1278,7 +1282,7 @@ function rebuildGroupSelect(
   const keepManualSelection = selectElement.dataset.userSelected === "true";
   const minMembers = getMinimumMembersPerGroup(participantCount);
   const minimumSelectable = Math.max(MIN_GROUP_COUNT, getRequiredGroupCount(participantCount));
-  const maximumSelectable = getMaximumGroupCount(participantCount, facilitatorCount);
+  const maximumSelectable = getMaximumGroupCount(participantCount);
 
   if (minimumSelectable > maximumSelectable) {
     selectElement.innerHTML = '<option value="">-</option>';
@@ -1301,7 +1305,9 @@ function rebuildGroupSelect(
     Number.isFinite(previousValue) &&
     previousValue >= minimumSelectable &&
     previousValue <= maximumSelectable;
-  const fallbackValue = canKeepPreviousValue ? previousValue : maximumSelectable;
+  const fallbackValue = canKeepPreviousValue
+    ? previousValue
+    : getDefaultGroupCount(minimumSelectable, maximumSelectable, facilitatorCount);
   selectElement.value = String(fallbackValue);
   if (!canKeepPreviousValue) {
     selectElement.dataset.userSelected = "false";
@@ -1404,12 +1410,12 @@ function updateGroupSelectConstraints() {
   rebuildGroupSelect(
     groupSelectRound1,
     round1Participants.length,
-    getFacilitatorParticipantCount(round1Participants)
+    countFacilitatorParticipants(round1Participants)
   );
   rebuildGroupSelect(
     groupSelectRound2,
     round2Participants.length,
-    getFacilitatorParticipantCount(round2Participants)
+    countFacilitatorParticipants(round2Participants)
   );
 
   updateRoundGuides();
@@ -2200,37 +2206,42 @@ function getShuffledRandomMembers(participants, count, blockedIds = []) {
   return shuffled.slice(0, count);
 }
 
-function buildPhasePreviewState(participants, finalGroups, elapsedMs) {
+function buildPhasePreviewState(participants, finalGroups, elapsedMs, options = {}) {
   const groupCount = finalGroups.length;
   const randomGroups = buildAnimatedPreviewGroups(participants, groupCount);
-  const facilitatorLocked = elapsedMs >= FACILITATOR_DRAW_MS;
-  const memberPhaseDuration = Math.max(1, DRAW_DURATION_MS - FACILITATOR_DRAW_MS);
-  const memberProgress = facilitatorLocked
-    ? Math.min(1, (elapsedMs - FACILITATOR_DRAW_MS) / memberPhaseDuration)
-    : 0;
+  const hasFacilitatorPhase = options.hasFacilitatorPhase === true;
+  const facilitatorPhaseDuration = hasFacilitatorPhase ? FACILITATOR_DRAW_MS : 0;
+  const facilitatorLocked = hasFacilitatorPhase && elapsedMs >= facilitatorPhaseDuration;
+  const memberPhaseDuration = Math.max(1, DRAW_DURATION_MS - facilitatorPhaseDuration);
+  const memberProgress = Math.min(
+    1,
+    Math.max(0, elapsedMs - facilitatorPhaseDuration) / memberPhaseDuration
+  );
 
   return finalGroups.map((finalGroup, index) => {
     const randomGroup = randomGroups[index] || [];
 
-    const facilitatorCandidateIndex = (() => {
-      const designated = pickFacilitatorIndex(finalGroup);
-      if (designated !== -1) {
-        return designated;
-      }
-      return finalGroup.length > 0 ? 0 : -1;
-    })();
+    const facilitatorCandidateIndex = pickFacilitatorIndex(finalGroup);
+    const hasDesignatedFacilitator = facilitatorCandidateIndex !== -1;
 
     const finalFacilitator =
-      facilitatorCandidateIndex >= 0 ? finalGroup[facilitatorCandidateIndex] : null;
+      hasDesignatedFacilitator ? finalGroup[facilitatorCandidateIndex] : null;
 
     const randomFacilitator =
-      randomGroup[Math.floor(Math.random() * Math.max(1, randomGroup.length))] || finalFacilitator;
+      hasDesignatedFacilitator
+        ? randomGroup[Math.floor(Math.random() * Math.max(1, randomGroup.length))] ||
+          finalFacilitator
+        : null;
 
-    const facilitatorParticipant = facilitatorLocked
-      ? finalFacilitator || randomFacilitator
-      : randomFacilitator || finalFacilitator;
+    const facilitatorParticipant = hasDesignatedFacilitator
+      ? facilitatorLocked
+        ? finalFacilitator || randomFacilitator
+        : randomFacilitator || finalFacilitator
+      : null;
 
-    const finalMembers = finalGroup.filter((_, memberIndex) => memberIndex !== facilitatorCandidateIndex);
+    const finalMembers = hasDesignatedFacilitator
+      ? finalGroup.filter((_, memberIndex) => memberIndex !== facilitatorCandidateIndex)
+      : finalGroup;
     const memberCount = finalMembers.length;
 
     const lockedMemberCount = facilitatorLocked
@@ -2289,15 +2300,16 @@ function buildPhasePreviewState(participants, finalGroups, elapsedMs) {
         name: facilitatorParticipant.name,
         isFacilitator: true,
         isListener: false,
-        locked: facilitatorLocked,
+        locked: hasDesignatedFacilitator ? facilitatorLocked : false,
       });
     }
 
     displayMembers.push(...micOnMembers, ...listenerMembers);
 
     return {
-      facilitatorName: facilitatorParticipant?.name || "調整中",
-      facilitatorLocked,
+      facilitatorName:
+        facilitatorParticipant?.name || (hasDesignatedFacilitator ? "調整中" : "ファシ未設定"),
+      facilitatorLocked: hasDesignatedFacilitator ? facilitatorLocked : false,
       displayMembers,
     };
   });
@@ -2317,10 +2329,14 @@ function renderAnimatedPreviewGroups(previewState) {
 
     if (heading) {
       const symbol = formatGroupSymbol(index + 1);
-      const facilitatorLabel =
-        state && state.facilitatorName !== "調整中"
-          ? `${state.facilitatorName}さん`
-          : "抽選中";
+      let facilitatorLabel = "抽選中";
+      if (state) {
+        if (state.facilitatorName === "ファシ未設定") {
+          facilitatorLabel = "ファシ未設定";
+        } else if (state.facilitatorName !== "調整中") {
+          facilitatorLabel = `${state.facilitatorName}さん`;
+        }
+      }
       const headingText = `${symbol}: ${facilitatorLabel}グループ`;
       heading.textContent = headingText;
       heading.title = headingText;
@@ -2419,10 +2435,18 @@ function runDrawAnimation(participants, groupCount, finalGroups) {
 
   const previewCards = Array.from(modalContent.querySelectorAll("[data-preview-card]"));
   const startTime = Date.now();
+  const hasFacilitatorPhase = finalGroups.some(
+    (group) => pickFacilitatorIndex(group) !== -1
+  );
+  const initialPhaseText = hasFacilitatorPhase
+    ? FACILITATOR_PHASE_TEXT
+    : GROUP_PHASE_TEXT;
   let highlightedIndex = -1;
 
   const renderInitialFrame = () => {
-    const previewState = buildPhasePreviewState(participants, finalGroups, 0);
+    const previewState = buildPhasePreviewState(participants, finalGroups, 0, {
+      hasFacilitatorPhase,
+    });
     renderAnimatedPreviewGroups(previewState);
 
     if (previewCards.length > 0) {
@@ -2432,7 +2456,7 @@ function runDrawAnimation(participants, groupCount, finalGroups) {
 
     updateModalDrawHeader({
       active: true,
-      phaseText: "ファシリテーター決定中",
+      phaseText: initialPhaseText,
       remainingMs: DRAW_DURATION_MS,
       progress: 0,
     });
@@ -2442,7 +2466,9 @@ function runDrawAnimation(participants, groupCount, finalGroups) {
 
   drawIntervalId = window.setInterval(() => {
     const elapsedMs = Date.now() - startTime;
-    const previewState = buildPhasePreviewState(participants, finalGroups, elapsedMs);
+    const previewState = buildPhasePreviewState(participants, finalGroups, elapsedMs, {
+      hasFacilitatorPhase,
+    });
     renderAnimatedPreviewGroups(previewState);
 
     if (previewCards.length > 0) {
@@ -2463,10 +2489,11 @@ function runDrawAnimation(participants, groupCount, finalGroups) {
       return;
     }
 
-    const phaseLabel =
-      elapsed < FACILITATOR_DRAW_MS
-        ? "ファシリテーター決定中"
-        : "メンバーを振り分け中";
+    const phaseLabel = hasFacilitatorPhase
+      ? elapsed < FACILITATOR_DRAW_MS
+        ? FACILITATOR_PHASE_TEXT
+        : MEMBER_PHASE_TEXT
+      : GROUP_PHASE_TEXT;
 
     updateModalDrawHeader({
       active: true,
@@ -2507,14 +2534,7 @@ function validateRoundShuffle(participants, groupCount) {
   const minimumMembersPerGroup = getMinimumMembersPerGroup(participants.length);
   const minimumParticipants = MIN_GROUP_COUNT * minimumMembersPerGroup;
   const requiredGroupCount = getRequiredGroupCount(participants.length);
-  const facilitatorGroupUpperBound = Math.min(
-    FACILITATOR_INPUT_COUNT,
-    getFacilitatorParticipantCount(participants)
-  );
-  const maximumGroupCount = getMaximumGroupCount(
-    participants.length,
-    getFacilitatorParticipantCount(participants)
-  );
+  const maximumGroupCount = getMaximumGroupCount(participants.length);
 
   if (participants.length < minimumParticipants) {
     return `参加者が${minimumParticipants}人未満です。`;
@@ -2525,9 +2545,6 @@ function validateRoundShuffle(participants, groupCount) {
   }
 
   if (requiredGroupCount > maximumGroupCount) {
-    if (facilitatorGroupUpperBound < requiredGroupCount) {
-      return `ファシリテーター候補数の上限により、現在は${facilitatorGroupUpperBound}グループまでです。参加者${participants.length}人には${requiredGroupCount}グループ以上が必要です。`;
-    }
     return `参加者${participants.length}人では、1グループ${minimumMembersPerGroup}〜${MAX_MEMBERS_PER_GROUP}人で2グループ以上を作れません。`;
   }
 
@@ -2536,9 +2553,6 @@ function validateRoundShuffle(participants, groupCount) {
   }
 
   if (groupCount > maximumGroupCount) {
-    if (maximumGroupCount === facilitatorGroupUpperBound) {
-      return `ファシリテーター候補数の上限により、${maximumGroupCount}グループ以下を選択してください。`;
-    }
     return `1グループ最小${minimumMembersPerGroup}人のため、参加者${participants.length}人は${maximumGroupCount}グループ以下を選択してください。`;
   }
 
@@ -3068,7 +3082,6 @@ function setPhase(nextPhase, options = {}) {
   closeAllGroupSelectMenus();
 
   const phase = Math.min(5, Math.max(1, Number(nextPhase) || 1));
-  const facilitatorCountForAdvance = getFacilitatorCandidates().names.length;
   const allowRound1ResultPending = options.allowRound1ResultPending === true;
   const allowRound2ResultPending = options.allowRound2ResultPending === true;
 
@@ -3087,17 +3100,6 @@ function setPhase(nextPhase, options = {}) {
     return;
   }
 
-  if (
-    currentPhase === 1 &&
-    phase > 1 &&
-    facilitatorCountForAdvance < MIN_FACILITATORS_TO_ADVANCE_PHASE
-  ) {
-    setErrorStatusMessage(
-      `ファシリテーター候補を${MIN_FACILITATORS_TO_ADVANCE_PHASE}人以上登録すると次のフェーズへ進めます。`
-    );
-    return;
-  }
-
   clearRound2CompletionMessageOutsidePhase5(phase);
   currentPhase = phase;
   clearError();
@@ -3108,9 +3110,6 @@ function setPhase(nextPhase, options = {}) {
 
 function updatePhaseUI() {
   const def = PHASE_DEFINITIONS[currentPhase] || PHASE_DEFINITIONS[1];
-  const facilitatorCountForAdvance = getFacilitatorCandidates().names.length;
-  const canAdvanceFromPhase1 =
-    facilitatorCountForAdvance >= MIN_FACILITATORS_TO_ADVANCE_PHASE;
 
   if (phaseLabel) {
     phaseLabel.textContent = `現在: ${def.title}`;
@@ -3126,13 +3125,11 @@ function updatePhaseUI() {
 
   phaseNavButtons.forEach((button) => {
     const phase = Number(button.dataset.phaseNav || "0");
-    const blockedByFacilitatorRule = currentPhase === 1 && phase > 1 && !canAdvanceFromPhase1;
     const blockedByRound1ResultRule = phase === 3 && !round1Groups;
     const blockedByRound2ResultRule = phase === 5 && !round2Groups;
     button.classList.toggle("is-active", phase === currentPhase);
     button.disabled =
       isDrawing ||
-      blockedByFacilitatorRule ||
       blockedByRound1ResultRule ||
       blockedByRound2ResultRule;
   });
@@ -3168,7 +3165,6 @@ function updatePhaseUI() {
     phaseNextButton.disabled =
       currentPhase >= 5 ||
       isDrawing ||
-      (currentPhase === 1 && !canAdvanceFromPhase1) ||
       (currentPhase === 2 && !round1Groups) ||
       (currentPhase === 4 && !round2Groups);
   }
@@ -3190,9 +3186,6 @@ function updateParticipantTableHeaders() {
 function updateActionButtonStates() {
   const round1Participants = buildRound1Participants();
   const round2Participants = buildRound2Participants();
-  const facilitatorCountForAdvance = getFacilitatorCandidates().names.length;
-  const canAdvanceFromPhase1 =
-    facilitatorCountForAdvance >= MIN_FACILITATORS_TO_ADVANCE_PHASE;
 
   const round1GroupCount = Number(groupSelectRound1?.value || "0");
   const round2GroupCount = Number(groupSelectRound2?.value || "0");
@@ -3215,7 +3208,7 @@ function updateActionButtonStates() {
   }
 
   if (goPhase2Button) {
-    goPhase2Button.disabled = isDrawing || currentPhase !== 1 || !canAdvanceFromPhase1;
+    goPhase2Button.disabled = isDrawing || currentPhase !== 1;
   }
 }
 
