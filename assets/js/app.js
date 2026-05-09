@@ -8,14 +8,14 @@ const MIN_MEMBERS_PER_GROUP_LARGE_THRESHOLD = 50;
 const MAX_MEMBERS_PER_GROUP = 7;
 const MIN_GROUP_COUNT = 2;
 
-const DRAW_DURATION_MS = 5000;
+const DRAW_DURATION_MS = 4000;
 const DRAW_TICK_MS = 120;
+const DRUM_ROLL_SOUND_SRC = "sound.mp3";
 const FACILITATOR_DRAW_MS = 1500;
 const MAX_GROUPS_WITHOUT_MODAL_SCROLL = 16;
 const DRAW_GRID_COLUMNS_DESKTOP = 8;
 const DRAW_GRID_COLUMNS_MOBILE = 4;
 const DRAW_GRID_MOBILE_MAX_WIDTH = 599;
-const GROUP_LABEL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const FACILITATOR_PHASE_TEXT = "ファシリテーター決定中";
 const MEMBER_PHASE_TEXT = "メンバーを振り分け中";
 const GROUP_PHASE_TEXT = "グループを振り分け中";
@@ -118,6 +118,7 @@ let drawIntervalId = null;
 let countdownIntervalId = null;
 let revealTimeoutId = null;
 let modalFitRafId = null;
+let drumRollAudio = null;
 
 let round1Groups = null;
 let round2Groups = null;
@@ -276,6 +277,9 @@ function clearRound2CompletionMessageOutsidePhase5(nextPhase) {
 
 function ensureModalElements() {
   if (modal && modalTitle && modalContent && modalCloseButton) {
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
     if (
       !modalDrawIndicator ||
       !modalDrawPhase ||
@@ -299,6 +303,10 @@ function ensureModalElements() {
   modalDrawPhase = document.querySelector("#modal-draw-phase");
   modalDrawCountdown = document.querySelector("#modal-draw-countdown");
   modalDrawProgressBar = document.querySelector("#modal-draw-progress-bar");
+
+  if (modal && modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
 
   return Boolean(modal && modalTitle && modalContent && modalCloseButton);
 }
@@ -1747,16 +1755,7 @@ function formatGroupSymbol(groupNumber) {
     return String(groupNumber);
   }
 
-  let value = normalized;
-  let label = "";
-
-  while (value > 0) {
-    const index = (value - 1) % GROUP_LABEL_ALPHABET.length;
-    label = `${GROUP_LABEL_ALPHABET[index]}${label}`;
-    value = Math.floor((value - 1) / GROUP_LABEL_ALPHABET.length);
-  }
-
-  return label;
+  return String(normalized);
 }
 
 function pickFacilitatorIndex(group) {
@@ -1894,6 +1893,45 @@ function clearDrawTimers() {
     window.clearTimeout(revealTimeoutId);
     revealTimeoutId = null;
   }
+
+  stopDrumRoll();
+}
+
+function getDrumRollAudio() {
+  if (!drumRollAudio) {
+    drumRollAudio = new Audio(DRUM_ROLL_SOUND_SRC);
+    drumRollAudio.preload = "auto";
+    drumRollAudio.load();
+  }
+
+  return drumRollAudio;
+}
+
+async function startDrumRoll() {
+  stopDrumRoll();
+
+  const audio = getDrumRollAudio();
+
+  try {
+    audio.currentTime = 0;
+    await audio.play();
+  } catch (error) {
+    stopDrumRoll();
+  }
+}
+
+function stopDrumRoll() {
+  if (!drumRollAudio) {
+    return;
+  }
+
+  drumRollAudio.pause();
+
+  try {
+    drumRollAudio.currentTime = 0;
+  } catch (error) {
+    // Some browsers can reject seeking before metadata is loaded.
+  }
 }
 
 function ensureModalDrawPhaseMinWidth() {
@@ -1998,7 +2036,6 @@ function openModal(title) {
   setModalRoundActionVisibility(false, true);
   updateModalDrawHeader({ active: false });
   modal.hidden = false;
-  modal.scrollIntoView({ behavior: "smooth", block: "start" });
   return true;
 }
 
@@ -2024,6 +2061,8 @@ function closeModal() {
 
   if (currentPhase === 5) {
     setPhase(4);
+  } else if (currentPhase === 3) {
+    setPhase(2);
   }
 }
 
@@ -2070,7 +2109,6 @@ function applyResultGridFit() {
   const groupCount = Number(modalContent.dataset.groupCount || "0");
   const fitRoot = modalContent.querySelector(".result-groups-fit, .result-grid-fit");
   const resultLayout = modalContent.querySelector(".result-groups-layout");
-  const resultNote = modalContent.querySelector(".result-groups-note");
 
   const shouldFit =
     Boolean(fitRoot) &&
@@ -2079,6 +2117,9 @@ function applyResultGridFit() {
     groupCount <= MAX_GROUPS_WITHOUT_MODAL_SCROLL;
 
   modalContent.classList.toggle("is-fit-groups", shouldFit);
+  if (modal) {
+    modal.classList.toggle("is-fit-groups", shouldFit);
+  }
   if (!fitRoot) {
     return;
   }
@@ -2086,47 +2127,18 @@ function applyResultGridFit() {
   fitRoot.classList.toggle("is-fit-25", shouldFit);
   fitRoot.style.removeProperty("--fit-scale");
 
-  if (!shouldFit) {
-    return;
-  }
-
   const grid = fitRoot.querySelector(".result-groups-grid, .group-grid");
   if (!grid) {
     return;
   }
 
+  if (!shouldFit) {
+    grid.style.removeProperty("grid-template-columns");
+    return;
+  }
+
   const columnCount = getGridColumnCount(groupCount);
   grid.style.gridTemplateColumns = `repeat(${columnCount}, minmax(0, 1fr))`;
-  fitRoot.style.setProperty("--fit-scale", "1");
-
-  const modalContentStyle = window.getComputedStyle(modalContent);
-  const horizontalPadding =
-    (Number.parseFloat(modalContentStyle.paddingLeft) || 0) +
-    (Number.parseFloat(modalContentStyle.paddingRight) || 0);
-  const verticalPadding =
-    (Number.parseFloat(modalContentStyle.paddingTop) || 0) +
-    (Number.parseFloat(modalContentStyle.paddingBottom) || 0);
-  const availableWidth = Math.max(1, modalContent.clientWidth - horizontalPadding - 2);
-  const reservedNoteHeight =
-    resultNote instanceof HTMLElement
-      ? Math.ceil(resultNote.getBoundingClientRect().height) +
-        (resultLayout instanceof HTMLElement
-          ? Number.parseFloat(
-              window.getComputedStyle(resultLayout).rowGap ||
-                window.getComputedStyle(resultLayout).gap ||
-                "0"
-            ) || 0
-          : 0)
-      : 0;
-  const availableHeight = Math.max(
-    1,
-    modalContent.clientHeight - verticalPadding - reservedNoteHeight - 2
-  );
-  const gridWidth = Math.max(1, Math.ceil(grid.scrollWidth));
-  const gridHeight = Math.max(1, Math.ceil(grid.scrollHeight));
-  const scale = Math.min(1, availableWidth / gridWidth, availableHeight / gridHeight);
-
-  fitRoot.style.setProperty("--fit-scale", scale.toFixed(4));
 }
 
 function scheduleResultGridFit() {
@@ -2156,22 +2168,20 @@ function getGridColumnCount(groupCount) {
     return maxColumns;
   }
 
+  const TARGET_ASPECT_RATIO = 16 / 9;
   const cappedMaxColumns = Math.max(1, Math.min(normalizedGroupCount, maxColumns));
   let bestColumnCount = cappedMaxColumns;
-  let bestRowCount = Number.POSITIVE_INFINITY;
-  let bestEmptySlots = Number.POSITIVE_INFINITY;
+  let bestScore = Number.POSITIVE_INFINITY;
 
   for (let columnCount = 1; columnCount <= cappedMaxColumns; columnCount += 1) {
     const rowCount = Math.ceil(normalizedGroupCount / columnCount);
     const emptySlots = rowCount * columnCount - normalizedGroupCount;
+    const ratioDiff = Math.abs(columnCount / rowCount - TARGET_ASPECT_RATIO);
+    const score = ratioDiff * 10 + emptySlots * 2;
 
-    if (
-      rowCount < bestRowCount ||
-      (rowCount === bestRowCount && emptySlots < bestEmptySlots)
-    ) {
+    if (score < bestScore) {
+      bestScore = score;
       bestColumnCount = columnCount;
-      bestRowCount = rowCount;
-      bestEmptySlots = emptySlots;
     }
   }
 
@@ -2457,15 +2467,14 @@ function renderDrawStage(groupCount) {
   lockDrawGridTrackSizes();
 }
 
-function runDrawAnimation(participants, groupCount, finalGroups) {
+async function runDrawAnimation(participants, groupCount, finalGroups) {
   renderDrawStage(groupCount);
 
   if (!ensureModalElements()) {
-    return Promise.resolve();
+    return;
   }
 
   const previewCards = Array.from(modalContent.querySelectorAll("[data-preview-card]"));
-  const startTime = Date.now();
   const hasFacilitatorPhase = finalGroups.some(
     (group) => pickFacilitatorIndex(group) !== -1
   );
@@ -2495,46 +2504,50 @@ function runDrawAnimation(participants, groupCount, finalGroups) {
 
   renderInitialFrame();
 
-  drawIntervalId = window.setInterval(() => {
-    const elapsedMs = Date.now() - startTime;
-    const previewState = buildPhasePreviewState(participants, finalGroups, elapsedMs, {
-      hasFacilitatorPhase,
-    });
-    renderAnimatedPreviewGroups(previewState);
-
-    if (previewCards.length > 0) {
-      if (highlightedIndex >= 0) {
-        previewCards[highlightedIndex].classList.remove("is-hot");
-      }
-      highlightedIndex = Math.floor(Math.random() * previewCards.length);
-      previewCards[highlightedIndex].classList.add("is-hot");
-    }
-  }, DRAW_TICK_MS);
-
-  countdownIntervalId = window.setInterval(() => {
-    const elapsed = Date.now() - startTime;
-    const remaining = Math.max(0, DRAW_DURATION_MS - elapsed);
-
-    if (remaining <= 0) {
-      updateModalDrawHeader({ active: false });
-      return;
-    }
-
-    const phaseLabel = hasFacilitatorPhase
-      ? elapsed < FACILITATOR_DRAW_MS
-        ? FACILITATOR_PHASE_TEXT
-        : MEMBER_PHASE_TEXT
-      : GROUP_PHASE_TEXT;
-
-    updateModalDrawHeader({
-      active: true,
-      phaseText: phaseLabel,
-      remainingMs: remaining,
-      progress: elapsed / DRAW_DURATION_MS,
-    });
-  }, 50);
+  await startDrumRoll();
 
   return new Promise((resolve) => {
+    const startTime = Date.now();
+
+    drawIntervalId = window.setInterval(() => {
+      const elapsedMs = Date.now() - startTime;
+      const previewState = buildPhasePreviewState(participants, finalGroups, elapsedMs, {
+        hasFacilitatorPhase,
+      });
+      renderAnimatedPreviewGroups(previewState);
+
+      if (previewCards.length > 0) {
+        if (highlightedIndex >= 0) {
+          previewCards[highlightedIndex].classList.remove("is-hot");
+        }
+        highlightedIndex = Math.floor(Math.random() * previewCards.length);
+        previewCards[highlightedIndex].classList.add("is-hot");
+      }
+    }, DRAW_TICK_MS);
+
+    countdownIntervalId = window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, DRAW_DURATION_MS - elapsed);
+
+      if (remaining <= 0) {
+        updateModalDrawHeader({ active: false });
+        return;
+      }
+
+      const phaseLabel = hasFacilitatorPhase
+        ? elapsed < FACILITATOR_DRAW_MS
+          ? FACILITATOR_PHASE_TEXT
+          : MEMBER_PHASE_TEXT
+        : GROUP_PHASE_TEXT;
+
+      updateModalDrawHeader({
+        active: true,
+        phaseText: phaseLabel,
+        remainingMs: remaining,
+        progress: elapsed / DRAW_DURATION_MS,
+      });
+    }, 50);
+
     revealTimeoutId = window.setTimeout(() => {
       clearDrawTimers();
       updateModalDrawHeader({ active: false });

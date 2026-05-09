@@ -1283,16 +1283,20 @@ html {
 }
 
 .result-modal {
-  margin-top: 0.9rem;
-  border: 0;
-  border-radius: 14px;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
   background: #ffffff;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .result-modal__panel {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
 }
 
 .result-modal__header {
@@ -1445,13 +1449,41 @@ html {
 }
 
 .result-modal__content {
-  padding: 0.75rem 0 0.95rem;
-  max-height: min(76vh, 860px);
+  min-height: 0;
+  padding: 0.75rem;
   overflow: auto;
 }
 
 .result-modal__content.is-fit-groups {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  padding: 0.5rem 0.75rem;
+}
+
+.result-modal.is-fit-groups .result-modal__panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  flex: 1;
+  min-height: 0;
+}
+
+.result-modal.is-fit-groups .result-modal__content {
+  flex: 1;
+  min-height: 0;
+}
+
+.result-modal.is-fit-groups .result-groups-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-modal.is-fit-groups .result-groups-fit {
+  flex: 1;
+  min-height: 0;
 }
 
 .result-grid-fit {
@@ -1459,54 +1491,72 @@ html {
 }
 
 .result-grid-fit.is-fit-25 {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
   overflow: hidden;
-  --fit-scale: 1;
 }
 
 .result-grid-fit.is-fit-25 .group-grid {
-  width: min(1580px, 100%);
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 0.9rem;
-  transform: scale(var(--fit-scale));
-  transform-origin: top center;
+  position: static;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 0.75rem;
+  align-content: start;
 }
 
 .result-grid-fit.is-fit-25 .group-card {
-  padding: 0.45rem 0.5rem;
-  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  height: auto;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .result-grid-fit.is-fit-25 .group-card h3 {
-  margin: 0 0 0.22rem;
-  font-size: 0.8rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.875rem;
+  flex-shrink: 0;
 }
 
 .result-grid-fit.is-fit-25 .group-card ul {
+  flex: none;
+  min-height: auto;
   display: grid;
-  gap: 0.2rem;
+  gap: 0.25rem;
+  overflow: visible;
 }
 
 .result-grid-fit.is-fit-25 .group-card li {
+  flex: none;
+  min-height: auto;
   margin: 0;
+  display: flex;
+  align-items: center;
 }
 
 .result-grid-fit.is-fit-25 .member-item {
-  gap: 0.22rem;
+  width: 100%;
+  gap: 0.3rem;
   border-radius: 6px;
-  padding: 0.14rem 0.24rem;
+  padding: 0.2rem 0.4rem;
 }
 
 .result-grid-fit.is-fit-25 .member-name {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
 }
 
 .result-grid-fit.is-fit-25 .member-tag {
-  padding: 0.07rem 0.22rem;
-  font-size: 0.54rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.875rem;
 }
 
 @keyframes fill-progress {
@@ -1774,17 +1824,7 @@ html {
     height: 36px;
   }
 
-  .result-modal__panel {
-    min-height: 0;
-  }
-
   .result-modal__content {
-    padding: 0.7rem 0 0.85rem;
-    max-height: min(68vh, 620px);
-  }
-
-  .result-grid-fit.is-fit-25 .group-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.6rem;
+    padding: 0.5rem;
   }
 }
